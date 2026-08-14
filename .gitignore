@@ -1,0 +1,25 @@
+# Système
+.DS_Store
+Thumbs.db
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+
+# Dépendances et build (si vous outillez le plugin)
+node_modules/
+dist/
+build/
+
+# Environnement et secrets — rien de sensible ne doit remonter ici,
+# le plugin ne demande aucune clé et n'accède pas au réseau
+.env
+.env.*
+*.pem
+*.key
+
+# Sorties locales de génération (vos JSON de composants)
+out/
+export/
+*.local.json

@@ -1,0 +1,462 @@
+{
+  "meta": {
+    "name": "Button",
+    "type": "composed",
+    "role": "button",
+    "description": "Déclenche une action qui modifie l'état du système. À préférer au lien quand on agit\n(enregistrer, supprimer), pas quand on navigue. Icon-only réservé aux actions dont\nl'icône est universelle."
+  },
+  "api": {
+    "props": {
+      "show-icon-left": {
+        "type": "boolean",
+        "default": true
+      },
+      "show-icon-right": {
+        "type": "boolean",
+        "default": false
+      },
+      "state": {
+        "type": "enum",
+        "enum": [
+          "enabled",
+          "hover",
+          "focus",
+          "press",
+          "disabled"
+        ],
+        "default": "enabled",
+        "runtime": {
+          "hover": ":hover",
+          "focus": ":focus-visible",
+          "press": ":active",
+          "disabled": "attribute:disabled"
+        }
+      },
+      "size": {
+        "type": "enum",
+        "enum": [
+          "md",
+          "xs",
+          "sm",
+          "lg"
+        ],
+        "default": "xs"
+      },
+      "hierarchy": {
+        "type": "enum",
+        "enum": [
+          "primary",
+          "secondary",
+          "tertiary"
+        ],
+        "default": "primary"
+      },
+      "tone": {
+        "type": "enum",
+        "enum": [
+          "brand",
+          "neutral",
+          "error"
+        ],
+        "default": "brand"
+      },
+      "type": {
+        "type": "enum",
+        "enum": [
+          "default",
+          "icon-only"
+        ],
+        "default": "default"
+      }
+    }
+  },
+  "platforms": [
+    "web",
+    "ios",
+    "android"
+  ],
+  "structure": {
+    "slots": {
+      "icon-left": {
+        "accepts": "Instance",
+        "default": {
+          "swap": "placeholder"
+        }
+      },
+      "icon-right": {
+        "accepts": "Instance",
+        "default": {
+          "swap": "placeholder"
+        }
+      }
+    },
+    "children": [
+      {
+        "component": "placeholder",
+        "name": "icon-left",
+        "props": {
+          "size": "16px"
+        }
+      },
+      {
+        "component": "placeholder",
+        "name": "icon-right",
+        "props": {
+          "size": "16px"
+        }
+      }
+    ],
+    "uses": [
+      "placeholder"
+    ],
+    "trees": [
+      {
+        "when": {
+          "type": "default"
+        },
+        "tree": [
+          {
+            "name": "icon-left",
+            "type": "instance",
+            "component": "placeholder"
+          },
+          {
+            "name": "button-label",
+            "type": "text"
+          },
+          {
+            "name": "icon-right",
+            "hidden": true,
+            "type": "instance",
+            "component": "placeholder"
+          }
+        ]
+      },
+      {
+        "when": {
+          "type": "icon-only"
+        },
+        "tree": [
+          {
+            "name": "icon-left",
+            "type": "instance",
+            "component": "placeholder"
+          }
+        ]
+      }
+    ]
+  },
+  "styles": {
+    "precedence": [
+      "hierarchy",
+      "tone",
+      "type",
+      "size",
+      "state",
+      "show-icon-left",
+      "show-icon-right"
+    ],
+    "default": {
+      "root": {
+        "background": {
+          "token": "color/bg/brand/mid/enabled"
+        },
+        "radius": 8,
+        "padding": {
+          "top": 4,
+          "right": 4,
+          "bottom": 4,
+          "left": 4
+        },
+        "gap": 2,
+        "layout": {
+          "direction": "row",
+          "mainAlign": "center",
+          "crossAlign": "center",
+          "sizingH": "hug",
+          "sizingV": "hug"
+        }
+      },
+      "label": {
+        "textColor": {
+          "token": "color/fg/onBrand/mid/enabled"
+        },
+        "typography": {
+          "fontFamily": "Cabin",
+          "fontStyle": "Bold",
+          "fontSize": 12,
+          "lineHeight": 16
+        }
+      },
+      "when": {
+        "state": "enabled",
+        "size": "xs",
+        "hierarchy": "primary",
+        "tone": "brand",
+        "type": "default"
+      }
+    },
+    "overrides": [
+      {
+        "when": {
+          "state": "enabled",
+          "size": "md",
+          "hierarchy": "primary",
+          "tone": "brand",
+          "type": "default"
+        },
+        "styles": {
+          "root": {
+            "padding": {
+              "top": 10,
+              "right": 12,
+              "bottom": 10,
+              "left": 12
+            },
+            "gap": 8
+          },
+          "label": {
+            "typography": {
+              "fontFamily": "Cabin",
+              "fontStyle": "SemiBold",
+              "fontSize": 14,
+              "lineHeight": 20
+            }
+          }
+        }
+      },
+      {
+        "when": {
+          "state": "hover",
+          "size": "md",
+          "hierarchy": "primary",
+          "tone": "brand",
+          "type": "default"
+        },
+        "styles": {
+          "root": {
+            "background": {
+              "token": "color/bg/brand/mid/hover"
+            },
+            "padding": {
+              "top": 10,
+              "right": 12,
+              "bottom": 10,
+              "left": 12
+            },
+            "gap": 8
+          },
+          "label": {
+            "textColor": {
+              "token": "color/fg/onBrand/mid/hover"
+            },
+            "typography": {
+              "fontFamily": "Cabin",
+              "fontStyle": "SemiBold",
+              "fontSize": 14,
+              "lineHeight": 20
+            }
+          }
+        }
+      },
+      {
+        "when": {
+          "state": "disabled",
+          "size": "md",
+          "hierarchy": "primary",
+          "tone": "brand",
+          "type": "default"
+        },
+        "styles": {
+          "root": {
+            "background": {
+              "token": "color/bg/brand/mid/disabled"
+            },
+            "padding": {
+              "top": 10,
+              "right": 12,
+              "bottom": 10,
+              "left": 12
+            },
+            "gap": 8
+          },
+          "label": {
+            "textColor": {
+              "token": "color/fg/onBrand/mid/disabled"
+            },
+            "typography": {
+              "fontFamily": "Cabin",
+              "fontStyle": "SemiBold",
+              "fontSize": 14,
+              "lineHeight": 20
+            }
+          }
+        }
+      },
+      {
+        "when": {
+          "state": "enabled",
+          "size": "md",
+          "hierarchy": "secondary",
+          "tone": "brand",
+          "type": "default"
+        },
+        "styles": {
+          "root": {
+            "background": {
+              "token": "color/bg/brand/weak/enabled"
+            },
+            "padding": {
+              "top": 10,
+              "right": 12,
+              "bottom": 10,
+              "left": 12
+            },
+            "gap": 8
+          },
+          "label": {
+            "textColor": {
+              "token": "color/fg/onBrand/weak/enabled"
+            },
+            "typography": {
+              "fontFamily": "Cabin",
+              "fontStyle": "SemiBold",
+              "fontSize": 14,
+              "lineHeight": 20
+            }
+          }
+        }
+      },
+      {
+        "when": {
+          "state": "enabled",
+          "size": "md",
+          "hierarchy": "tertiary",
+          "tone": "brand",
+          "type": "default"
+        },
+        "styles": {
+          "root": {
+            "background": {
+              "token": "color/bg/brand/blending/enabled"
+            },
+            "padding": {
+              "top": 10,
+              "right": 12,
+              "bottom": 10,
+              "left": 12
+            },
+            "gap": 8
+          },
+          "label": {
+            "textColor": {
+              "token": "color/fg/onBrand/blending/enabled"
+            },
+            "typography": {
+              "fontFamily": "Cabin",
+              "fontStyle": "SemiBold",
+              "fontSize": 14,
+              "lineHeight": 20
+            }
+          }
+        }
+      },
+      {
+        "when": {
+          "state": "enabled",
+          "size": "md",
+          "hierarchy": "primary",
+          "tone": "error",
+          "type": "default"
+        },
+        "styles": {
+          "root": {
+            "background": {
+              "token": "color/bg/error/mid/enabled"
+            },
+            "padding": {
+              "top": 10,
+              "right": 12,
+              "bottom": 10,
+              "left": 12
+            },
+            "gap": 8
+          },
+          "label": {
+            "textColor": {
+              "token": "color/fg/onError/mid/enabled"
+            },
+            "typography": {
+              "fontFamily": "Cabin",
+              "fontStyle": "SemiBold",
+              "fontSize": 14,
+              "lineHeight": 20
+            }
+          }
+        }
+      },
+      {
+        "when": {
+          "state": "enabled",
+          "size": "sm",
+          "hierarchy": "primary",
+          "tone": "brand",
+          "type": "icon-only"
+        },
+        "styles": {
+          "root": {
+            "padding": {
+              "top": 10,
+              "right": 10,
+              "bottom": 10,
+              "left": 10
+            },
+            "gap": 4,
+            "layout": {
+              "direction": "row",
+              "mainAlign": "center",
+              "crossAlign": "center",
+              "sizingH": "fixed",
+              "width": 32,
+              "sizingV": "fixed",
+              "height": 32
+            }
+          }
+        }
+      }
+    ]
+  },
+  "states": {
+    "list": [
+      "disabled : jamais pour cacher une permission"
+    ]
+  },
+  "interaction": {
+    "pattern": "ARIA APG « Button » ; activation à Entrée et Espace."
+  },
+  "rules": {
+    "a11y": [
+      "focus visible obligatoire (ring 2px)",
+      "label explicite, pas de « Cliquez ici »"
+    ],
+    "behavior": [
+      "un clic = une action, jamais de double effet",
+      "une action destructive se protège par une **confirmation** (Dialog `role=alertdialog`), jamais en désactivant le bouton"
+    ],
+    "writing": [
+      "le label est un verbe d'action (« Enregistrer »), jamais « Cliquez ici »",
+      "pas de ponctuation finale, pas de majuscules à chaque mot"
+    ],
+    "forbidden": [
+      "deux primary côte à côte",
+      "`tone=error` + `state=disabled` : le destructif grisé perd son signal de danger — laisser le bouton actif et confirmer"
+    ]
+  },
+  "examples": [
+    "CTA de formulaire : hierarchy=primary, size=md",
+    "action secondaire de dialog : hierarchy=secondary"
+  ],
+  "_doc_source": "button-doc.md",
+  "_tool": "component-as-data 2.16 (bans as data: invalidCombinations parsed from the doc; cascade closure on superseded axes; status/validation/spaced-values lints)",
+  "_todo_ai": []
+}

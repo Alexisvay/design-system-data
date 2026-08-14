@@ -1,0 +1,794 @@
+<style>
+  /* --accent = accents TEXTE (lisibles sur le fond), --brand = SURFACES (boutons, pastilles) */
+  :root { --brand:#2E4FD8; --accent:#2E4FD8; --warn:#b26b00; --ok:#0d7a4f; --bad:#c0362c; --lintc:#2c6ecb; color-scheme: light; }
+  /* Figma pose .figma-dark sur <html> (themeColors:true) : accents recalibrés + scrollbars/contrôles natifs en sombre */
+  .figma-dark { --brand:#4A63E7; --accent:#9DB1FF; --warn:#E3A008; --ok:#4CC38A; --bad:#F87168; --lintc:#7CB0F5; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding-bottom:72px; font-family: Inter,-apple-system,"Segoe UI",sans-serif; font-size:13px;
+    color: var(--figma-color-text,#1e1e1e); background: var(--figma-color-bg,#fff); }
+  .mono { font-family: ui-monospace,"SF Mono",Menlo,monospace; }
+  /* en-tête sur UNE ligne : la fenêtre Figma nomme déjà le plugin, la pédagogie vit dans l'état vide de l'étape 1 */
+  .pad { display:flex; align-items:baseline; gap:8px; padding:12px 18px 10px; }
+  h1 { font-size:13.5px; margin:0; }
+  .hint { font-size:11px; color: var(--figma-color-text-secondary,#8a8a8a); }
+  .sp { flex:1; }
+  .num { width:20px; height:20px; border-radius:99px; background: var(--brand); color:#fff; font-size:11px;
+    display:inline-flex; align-items:center; justify-content:center; flex:none; font-family: ui-monospace,monospace; }
+  .num.done { background: var(--ok); }
+  .num.warnb { background: var(--warn); }
+
+  /* --- stepper persistant : la nav du plugin, un écran par étape --- */
+  /* topbar = stepper + rappel de cible, sticky ensemble ; leur hauteur réelle nourrit --topbar-h (cf. .stats) */
+  .topbar { position:sticky; top:0; z-index:5; background: var(--figma-color-bg,#fff); }
+  .stepbar { display:flex; gap:4px; align-items:center; padding:10px 18px;
+    background: var(--figma-color-bg,#fff); border-bottom:1px solid var(--figma-color-border,#eee); overflow-x:auto; }
+  /* rappel permanent de la cible hors écran 1 : on sait toujours sur QUOI on travaille, cliquable pour en changer */
+  .ctx { display:flex; align-items:center; gap:8px; width:100%; padding:7px 18px 8px; border:none;
+    border-bottom:1px solid var(--figma-color-border,#eee); background: var(--figma-color-bg-secondary,#fafafa);
+    color:inherit; font:inherit; font-size:11.5px; text-align:left; cursor:pointer; }
+  .ctx[hidden] { display:none; }
+  .ctx:hover { background: rgba(46,79,216,.07); }
+  .figma-dark .ctx:hover { background: rgba(157,177,255,.1); }
+  .ctx b { font-family: ui-monospace,monospace; }
+  .ctx .chg { margin-left:auto; color: var(--accent); flex:none; }
+  .schip { display:flex; align-items:center; gap:6px; border:1px solid var(--figma-color-border,#e0e0e0); background:none;
+    color:inherit; font:inherit; font-size:11.5px; border-radius:99px; padding:5px 11px 5px 5px; cursor:pointer; white-space:nowrap; }
+  .schip .num { width:18px; height:18px; font-size:10px; }
+  .schip.cur { border-color: var(--accent); background: rgba(46,79,216,.07); font-weight:600; }
+  .figma-dark .schip.cur { background: rgba(157,177,255,.12); }
+  .schip:disabled { opacity:.45; cursor:default; }
+  .schip:hover:not(:disabled):not(.cur) { border-color: var(--accent); }
+
+  /* --- écrans --- */
+  .screen { padding:16px 18px 20px; }
+  .screen[hidden] { display:none; }
+  /* écran 4 : la zone génération est paddée, les résultats (stats sticky, panneaux) vivent en pleine largeur */
+  #s4.screen { padding:0 0 8px; }
+  #genzone { padding:16px 18px 4px; }
+  .out[hidden] { display:none; }
+  .cardhead { display:flex; align-items:center; gap:8px; font-weight:600; font-size:12.5px; margin-bottom:12px; }
+  .cardhead .hint { font-weight:400; }
+
+  /* --- barre de navigation fixe : avancer/reculer, toujours à disposition --- */
+  .navbar { position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; gap:10px; align-items:center;
+    padding:12px 46px 12px 18px; background: var(--figma-color-bg,#fff); border-top:1px solid var(--figma-color-border,#eee); } /* padding-droit : l'emplacement du grip */
+  button.nav { border:none; border-radius:7px; background: var(--brand); color:#fff; font-size:12.5px; font-weight:600;
+    padding:11px 18px; min-height:40px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+  button.nav:hover:not(:disabled) { filter:brightness(1.08); }
+  button.nav:disabled { opacity:.45; cursor:default; }
+  button.nav[hidden] { display:none; }
+  button.nav.back { background:none; color: var(--figma-color-text-secondary,#7a7a7a);
+    border:1px solid var(--figma-color-border,#e0e0e0); font-weight:400; }
+  button.nav.back:hover { border-color: var(--accent); color: var(--accent); filter:none; }
+
+  .sel { display:flex; align-items:center; gap:9px; padding:12px 14px; border-radius:7px;
+    background: var(--figma-color-bg-secondary,#f5f5f5); font-size:12px; }
+  .dot { width:8px; height:8px; border-radius:99px; background:#c4c4c4; flex:none; } .dot.on { background: var(--ok); }
+  .sel b { font-family: ui-monospace,monospace; }
+
+  button.go { width:100%; border:none; border-radius:7px; background: var(--brand); color:#fff;
+    font-size:13px; font-weight:600; padding:13px; cursor:pointer; min-height:44px;
+    display:flex; align-items:center; justify-content:center; gap:8px; }
+  button.go:hover:not(:disabled) { filter:brightness(1.08); }
+  button.go:disabled { opacity:.45; cursor:default; }
+  button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  .spin { width:13px; height:13px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:99px;
+    animation: rot .7s linear infinite; flex:none; }
+  .spin.dim { border-color: var(--figma-color-border,#e0e0e0); border-top-color: var(--accent); } /* sur fond de panneau, pas sur bouton plein */
+  @keyframes rot { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 1.6s; } }
+
+  /* étape 2 : le scan part tout seul (local, read-only) — seul « Apply » reste un acte consenti */
+  .scanline { display:flex; align-items:center; gap:8px; padding:2px 0 4px; font-size:12px;
+    color: var(--figma-color-text-secondary,#8a8a8a); }
+  .scanline[hidden] { display:none; }
+  /* les règles embarquées : le plugin n'a pas de réseau, renvoyer à un fichier externe est un cul-de-sac */
+  .rules { margin-top:14px; font-size:11.5px; color: var(--figma-color-text-secondary,#8a8a8a); }
+  .rules > summary { cursor:pointer; font-size:11.5px; }
+  .rules ul { margin:9px 0 0; padding-left:16px; }
+  .rules li { margin:5px 0; line-height:1.5; }
+  .rules code { font-family: ui-monospace,monospace; font-size:10.5px; color: var(--accent); }
+
+  /* --- panneaux (corrections, doc) --- */
+  .panel { margin-top:12px; padding:13px 15px; border-radius:7px; font-size:11.5px; }
+  .panel[hidden] { display:none; }
+  #fixes, #docout { background: rgba(46,79,216,.06); border:1px solid rgba(46,79,216,.25); }
+  .figma-dark #fixes, .figma-dark #docout { background: rgba(157,177,255,.08); border-color: rgba(157,177,255,.3); }
+  .fxrow { display:flex; align-items:center; gap:8px; margin:3px 0; font-size:11.5px; flex-wrap:wrap;
+    padding:7px 8px; border-radius:5px; cursor:pointer; }
+  .fxrow:hover { background: rgba(46,79,216,.07); }
+  .fxrow .mono { font-size:11px; }
+  .fxrow input { margin:0; width:14px; height:14px; accent-color: var(--brand); }
+  #fixes ul { margin:6px 0 0; padding-left:16px; } #fixes li { margin:4px 0; }
+  #fixes .w { color: var(--warn); font-weight:700; } #fixes .h { color: var(--lintc); font-weight:700; }
+  .okmsg { color: var(--ok); font-weight:600; }
+  button.lnk { background:none; border:none; padding:0; font:inherit; font-size:11px; color: var(--accent);
+    cursor:pointer; text-decoration:underline; }
+
+  /* --- doc.md : zone de dépôt (étape 3) --- */
+  .dropzone { width:100%; border:1.5px dashed var(--figma-color-border,#c9c9c9); border-radius:9px; background:none;
+    color: var(--figma-color-text-secondary,#8a8a8a); font:inherit; font-size:12px; padding:24px 14px; cursor:pointer; text-align:center; }
+  .dropzone:hover, .screen.dropping .dropzone { border-color: var(--accent); color: var(--accent); }
+
+  .err { color: var(--bad); font-size:12px; padding:12px 18px 0; } .err[hidden]{ display:none; }
+
+  /* --- résultats --- */
+  .out.stale .rpanel, .out.stale #json { opacity:.55; } /* la sélection a changé : le résultat affiché est celui d'avant */
+  .stalemsg { display:flex; align-items:center; gap:8px; font-size:11px; color: var(--warn); font-weight:600; }
+  .stalemsg[hidden] { display:none; } .stalemsg b { font-family: ui-monospace,monospace; }
+  /* la barre est sticky sous la topbar, dont la hauteur varie (rappel de cible, retour à la ligne) : mesurée en JS */
+  .stats { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:14px 18px 10px;
+    position:sticky; top: var(--topbar-h, 84px); background: var(--figma-color-bg,#fff); z-index:2;
+    border-bottom:1px solid var(--figma-color-border,#f0f0f0); }
+  .mini { font-size:11px; text-transform:uppercase; letter-spacing:.04em; background:none; border:1px solid var(--figma-color-border,#e0e0e0);
+    color: var(--figma-color-text-secondary,#7a7a7a); border-radius:6px; padding:8px 12px; min-height:32px; cursor:pointer; font-family: ui-monospace,monospace; }
+  .mini:hover { border-color: var(--accent); color: var(--accent); }
+  pre { margin:0; padding:4px 18px 14px 32px; overflow-x:auto; font-family: ui-monospace,monospace; font-size:11.5px; line-height:1.65; white-space:pre; }
+  .jk { color: var(--accent); } .jv { opacity:.82; }
+  /* JSON par sections repliables ; styles.overrides (le verbeux) replié par défaut */
+  #json { padding:6px 0 4px; }
+  .sec { border-top:1px solid var(--figma-color-border,#f0f0f0); } .sec:first-child { border-top:none; }
+  .sec summary { cursor:pointer; padding:9px 18px; font-family: ui-monospace,monospace; font-size:11.5px; }
+  .sec summary:hover { background: rgba(46,79,216,.05); }
+  .figma-dark .sec summary:hover { background: rgba(157,177,255,.1); }
+  .sec.sub { margin:0 0 8px 16px; border-top:none; border-left:2px solid var(--figma-color-border,#e8e8e8); }
+  .rpanel { margin:12px 18px 0; padding:13px 15px; border-radius:7px; font-size:11.5px; }
+  .rpanel[hidden] { display:none; }
+  .rpanel ul { margin:7px 0 0; padding-left:18px; } .rpanel li { margin:4px 0; }
+  .psub { display:block; font-size:11px; font-weight:400; color: var(--figma-color-text-secondary,#8a8a8a); margin-top:3px; }
+  .r2 { font-family: ui-monospace,monospace; font-size:11px; color: var(--figma-color-text-secondary,#8a8a8a); }
+  .rpanel summary { cursor:pointer; } /* chaque bloc porte son indicateur et se replie */
+  .lint { background: rgba(44,110,203,.07); border:1px solid rgba(44,110,203,.22); } .lint summary b { color: var(--lintc); }
+  .figma-dark .lint { background: rgba(124,176,245,.08); border-color: rgba(124,176,245,.25); }
+  .lint .r { font-family: ui-monospace,monospace; font-size:11px; color: var(--lintc); opacity:.8; }
+  .lint .w { color: var(--warn); font-weight:700; } .lint .h { color: var(--lintc); font-weight:700; }
+  .check { background: var(--figma-color-bg-secondary,#fafafa); border:1px solid var(--figma-color-border,#e4e4e4); }
+  .ck { list-style:none; margin:7px 0 0; padding:0; }
+  .ck li { margin:5px 0; display:flex; gap:8px; }
+  .ck li.done { opacity:.6; }
+  .ck .ok3 { color: var(--ok); font-weight:700; flex:none; }
+  .ck .no3 { color: var(--bad); font-weight:700; flex:none; }
+  /* ✓/✗ sont décoratifs : l'état part en texte pour les lecteurs d'écran */
+  .vh { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  /* bloc Data : même bloc bordé que les autres panneaux, le JSON garde sa pleine largeur */
+  .data { background: var(--figma-color-bg,#fff); border:1px solid var(--figma-color-border,#e4e4e4);
+    padding:13px 0 6px; margin-bottom:16px; }
+  .data > summary { padding:0 18px; }
+  .data > .psub { padding:0 18px; margin-top:4px; }
+  .figma-dark .fxrow:hover { background: rgba(157,177,255,.1); }
+  .badge { font-family: ui-monospace,monospace; font-size:11px; border-radius:5px; padding:2px 6px; flex:none;
+    border:none; font-weight:inherit; }
+  .badge.w { background: rgba(180,110,0,.14); color: var(--warn); }
+  .figma-dark .badge.w { background: rgba(227,160,8,.18); }
+  .badge.h { background: rgba(44,110,203,.12); color: var(--lintc); }
+  .figma-dark .badge.h { background: rgba(124,176,245,.16); }
+  /* « by hand » mène à l'étape 3 : le constat devient le chemin, au lieu d'un simple étiquetage */
+  button.badge { cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+  button.badge:hover { filter:brightness(1.1); }
+  /* --- poignée de redimensionnement : une vraie pastille-contrôle dans la barre de nav, la taille persiste --- */
+  #rsz { position:fixed; right:8px; bottom:18px; width:28px; height:28px; cursor:nwse-resize; z-index:10;
+    border:1px solid var(--figma-color-border,#d0d0d0); border-radius:7px; background: var(--figma-color-bg,#fff);
+    display:flex; align-items:center; justify-content:center; }
+  #rsz::before { content:''; width:14px; height:14px;
+    background: repeating-linear-gradient(135deg, transparent, transparent 3px, var(--figma-color-text-secondary,#8a8a8a) 3px, var(--figma-color-text-secondary,#8a8a8a) 5px);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+  #rsz:hover { border-color: var(--accent); }
+  #rsz:hover::before { background: repeating-linear-gradient(135deg, transparent, transparent 3px, var(--accent) 3px, var(--accent) 5px); }
+</style>
+
+<div class="pad">
+  <h1>Component as Data</h1>
+  <span class="mono hint" id="ver">v2</span>
+</div>
+
+<div class="topbar" id="topbar">
+  <nav class="stepbar" aria-label="Steps">
+    <button class="schip cur" id="tab1" aria-current="step" title="Pick the component to turn into data"><span class="num" id="n1" aria-hidden="true">1</span>Component</button>
+    <button class="schip" id="tab2" disabled title="Check and fix the naming before extracting"><span class="num" id="n2" aria-hidden="true">2</span>Nomenclature</button>
+    <button class="schip" id="tab3" disabled title="Attach the component's doc.md — its sections fill the judgment fields"><span class="num" id="n3" aria-hidden="true">3</span>Doc</button>
+    <button class="schip" id="tab4" disabled title="Generate the JSON and read the results (deterministic, no network)"><span class="num" id="n4" aria-hidden="true">4</span>Data</button>
+  </nav>
+  <button class="ctx" id="ctx" hidden title="Go back to step 1 to target another component"></button>
+</div>
+
+<div class="err" id="err" hidden role="alert" aria-live="assertive"></div>
+
+<div class="screen" id="s1">
+  <div class="cardhead">Component</div>
+  <p class="hint" id="tagline" style="margin:0 0 12px">Turn a Figma component into structured data. Select, check the nomenclature, attach the doc, generate — everything runs locally.</p>
+  <div class="sel"><span class="dot" id="seldot"></span><span id="selname">Nothing selected · click a component (or a component set) on the canvas</span></div>
+  <p class="hint" style="margin:10px 0 0">Selecting an instance resolves to its master automatically.</p>
+  <div class="cardhead" style="margin-top:18px">Design tokens</div>
+  <button class="mini" id="tokens1" title="Download tokens.json: every local token + text style of the file, with resolved values (per mode) — one table for the whole DS">Tokens .json</button>
+  <p class="hint" style="margin:8px 0 0">Whole-file export (variables + text styles) — needs no selection, available right here.</p>
+</div>
+
+<div class="screen" id="s2" hidden>
+  <div class="cardhead">Nomenclature <span class="hint">· properties &amp; layers</span></div>
+  <p class="hint" style="margin:0 0 12px">The naming is read as soon as you land here — nothing is renamed without your approval.</p>
+  <div class="scanline" id="scanline" hidden><span class="spin dim" id="fixspin"></span><span id="scanmsg">Reading the naming…</span></div>
+  <div class="panel" id="fixes" hidden></div>
+  <details class="rules">
+    <summary>The rules in short — full reference in nomenclature-composants.md, shipped with this plugin</summary>
+    <ul>
+      <li><b>Props in kebab-case</b>, values lowercase: <code>hierarchy</code> / <code>primary</code>, not <code>[🎨] Hierarchy</code> / <code>Primary</code>.</li>
+      <li><b>One axis = one decision.</b> A prop that mixes two things (<code>style=primary-large</code>) splits into <code>hierarchy</code> and <code>size</code>.</li>
+      <li><b>States live in one place</b>, and <code>disabled</code> lives in <code>state</code> (<code>enabled, hover, focus, press, disabled</code>) — never as an <code>is-disabled</code> boolean, which would let <em>hover + disabled</em> exist.</li>
+      <li><b>Booleans are prefixed</b>: <code>show-*</code> for visibility, <code>is-*</code> for states.</li>
+      <li><b>The name never carries the type</b>: no <code>icon-swap</code>, no <code>label-text</code> — the data is already typed.</li>
+      <li><b>Content props take the name of the layer they fill</b>: the prop <code>label</code> fills the layer <code>…label</code>, the prop <code>icon-left</code> fills the instance <code>icon-left</code>.</li>
+      <li><b>Shared vocabulary across components</b>: <code>state, size, hierarchy, tone, type, status, validation, selection, shape, placement, orientation</code>.</li>
+      <li><b>Layers: the same element keeps the same name in every variant</b>, named by role (<code>icon-left</code>, <code>checkbox-label</code>, <code>card-header</code>) — never <code>Vector</code> or <code>Rectangle 2</code>.</li>
+      <li><b>A nested instance takes the role it plays here</b>, not the name Figma copied from its source (<code>item</code>, not <code>_Bottom-bar-item</code>) — the underscore only ever means “internal component”, and a layer is neither public nor internal.</li>
+    </ul>
+  </details>
+</div>
+
+<div class="screen" id="s3" hidden>
+  <div class="cardhead">Documentation <span class="hint">· the judgment layer</span></div>
+  <p class="hint" style="margin:0 0 12px">The extraction reads the measurable (props, styles, states). The doc brings what no tool can guess: description, usage rules, accessibility, examples. One markdown per component, merged verbatim into the JSON.</p>
+  <button class="dropzone" id="docpick">Drop the component's doc.md here — or click to browse</button>
+  <input type="file" id="docfile" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+  <div class="panel" id="docout" hidden></div>
+  <p class="hint" style="margin:12px 0 0">Convention: ## Description, ## Role, ## Platforms, ## States, ## Interaction, ## A11y, ## Behavior, ## Writing, ## Forbidden, ## Examples — full reference in doc-composant.md, shipped with the kit. Skippable, but without it 8 of the 13 checklist points stay unchecked.</p>
+</div>
+
+<div class="screen" id="s4" hidden>
+  <div id="genzone">
+    <div class="cardhead">Data</div>
+    <p class="hint" id="docstat" style="margin:0 0 12px">No doc attached (step 3) — the “by hand” fields will stay unchecked.</p>
+    <button class="go" id="go" disabled title="Deterministic extraction + audit, no network">
+      <span class="spin" id="gospin" hidden></span><span id="golabel">Generate JSON</span>
+    </button>
+    <p class="hint" id="genhint" style="margin:10px 0 0">Deterministic extraction + audit, no network. The results appear right here.</p>
+  </div>
+  <div class="out" id="out" hidden aria-live="polite">
+  <div class="stats">
+    <button class="mini" id="copy" title="Copy the component's JSON to the clipboard">Copy JSON</button>
+    <button class="mini" id="export" title="Download the component's JSON as a .json file">Export .json</button>
+    <button class="mini" id="tokens" title="Download tokens.json: every local token + text style of the file, with resolved values (per mode) — one table for the whole DS, no selection needed (also available from step 1)">Tokens .json</button>
+    <button class="mini" id="report" title="Copy a Markdown health report (completeness checklist, naming findings) — ready to paste in a ticket or review">Report .md</button>
+    <span class="sp"></span>
+    <span class="stalemsg" id="stale" hidden></span>
+  </div>
+  <details class="rpanel lint" id="lint" open hidden></details>
+  <details class="rpanel check" id="gaps" open hidden></details>
+  <details class="rpanel data" id="datap" open>
+    <summary><b>Data · <span class="mono" id="dataname">component.json</span></b></summary>
+    <span class="psub">The component as structured data — exactly what Copy JSON and Export .json produce. Sections fold; the verbose styles.overrides is folded by default.</span>
+    <div id="json"></div>
+  </details>
+  </div>
+</div>
+
+<div class="navbar">
+  <button class="nav back" id="navback" hidden>←</button>
+  <span class="sp"></span>
+  <button class="nav" id="navnext">Next</button>
+</div>
+
+<div id="rsz" title="Drag to resize" aria-hidden="true"></div>
+
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var post = function (m) { parent.postMessage({ pluginMessage: m }, '*'); };
+  var hasSel = false, selName = null, selMeta = '', fullJSON = null, fixProps = [], fixFinds = [];
+  var fixState = null;            // null = pas vérifié ; 0 = clean ; n = propositions restantes
+  var appliedNote = '', appliedFails = [];
+  var docData = null, scanning = false;
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  function busy(btnId, spinId, on) { $(btnId).disabled = on || !hasSel; $(spinId).hidden = !on; }
+  function scanBusy(on, msg) { scanning = on; $('scanline').hidden = !on; if (msg) $('scanmsg').textContent = msg; }
+
+  /* la topbar (stepper + rappel de cible) est sticky et de hauteur variable : la barre d'actions
+     des résultats s'y colle via --topbar-h, mesurée au lieu d'être devinée */
+  function measureTop() {
+    document.documentElement.style.setProperty('--topbar-h', $('topbar').offsetHeight + 'px');
+  }
+  if (window.ResizeObserver) new ResizeObserver(measureTop).observe($('topbar'));
+
+  /* --- navigation : un écran par étape, le stepper est la nav --- */
+  var SCREENS = ['s1', 's2', 's3', 's4'];
+  var TABS = { s1: 'tab1', s2: 'tab2', s3: 'tab3', s4: 'tab4' };
+  var STEP_LABELS = { s1: '1 Component', s2: '2 Nomenclature', s3: '3 Doc', s4: '4 Data' };
+  var curScreen = 's1';
+  function showScreen(id) {
+    curScreen = id;
+    SCREENS.forEach(function (s) { $(s).hidden = (s !== id); });
+    SCREENS.forEach(function (s) {
+      var t = $(TABS[s]);
+      t.classList.toggle('cur', s === id);
+      if (s === id) t.setAttribute('aria-current', 'step'); else t.removeAttribute('aria-current');
+    });
+    updateFooter();
+    renderCtx();
+    window.scrollTo(0, 0);
+    maybeAutoScan(); // l'étape 2 lit la nomenclature d'elle-même : le scan est local et ne modifie rien
+  }
+  /* rappel de cible : hors écran 1 (qui porte déjà le sélecteur), on répète sur QUOI on travaille */
+  function renderCtx() {
+    var el = $('ctx');
+    el.hidden = (curScreen === 's1');
+    el.innerHTML = hasSel
+      ? '<span class="dot on"></span><span>Working on <b>' + esc(selName) + '</b>'
+        + (selMeta ? ' <span class="hint">· ' + esc(selMeta) + '</span>' : '') + '</span><span class="chg">Change ↑</span>'
+      : '<span class="dot"></span><span class="hint">No component selected — click one on the canvas</span><span class="chg">Step 1 ↑</span>';
+    measureTop();
+  }
+  $('ctx').addEventListener('click', function () { showScreen('s1'); });
+  // jeton du scan en cours, renvoyé tel quel par code.js : une réponse plus ancienne que la
+  // dernière demande est jetée (on change de composant pendant le scan, la réponse de l'ancien
+  // arriverait s'afficher sous le nom du nouveau). Le nom de la cible ne suffit pas comme clé :
+  // le changement de cible relance aussitôt un scan, et les deux porteraient le même nom.
+  var scanToken = 0, scanPending = 0;
+  function startScan() {
+    scanPending = ++scanToken;
+    scanBusy(true, 'Reading the naming…');
+    post({ type: 'autofix-scan', token: scanPending });
+  }
+  // le scan ne repart que s'il n'a pas déjà tourné pour cette cible (fixState non nul = résultat à l'écran)
+  function maybeAutoScan() {
+    if (curScreen !== 's2' || !hasSel || scanning || fixState !== null) return;
+    $('err').hidden = true; $('fixes').hidden = true;
+    startScan();
+  }
+  SCREENS.forEach(function (s) { $(TABS[s]).addEventListener('click', function () { showScreen(s); }); });
+  // barre fixe : l'action « avancer » est primaire et toujours visible ; « reculer » reste discret
+  function updateFooter() {
+    var i = SCREENS.indexOf(curScreen);
+    var back = $('navback'), next = $('navnext');
+    back.hidden = i <= 0;
+    if (i > 0) back.textContent = '← ' + STEP_LABELS[SCREENS[i - 1]];
+    var target = SCREENS[i + 1];
+    next.hidden = !target;
+    if (target) {
+      next.textContent = 'Next · ' + STEP_LABELS[target] + ' →';
+      next.disabled = !hasSel;
+    }
+  }
+  $('navback').addEventListener('click', function () { var i = SCREENS.indexOf(curScreen); if (i > 0) showScreen(SCREENS[i - 1]); });
+  $('navnext').addEventListener('click', function () { var i = SCREENS.indexOf(curScreen); if (SCREENS[i + 1]) showScreen(SCREENS[i + 1]); });
+
+  /* trois états pour les quatre chips, même langage partout : à faire (le numéro), ✓ fait, ! à regarder.
+     Le badge est décoratif (aria-hidden) : l'état part dans l'aria-label du chip, sinon il est muet au lecteur d'écran. */
+  var STEP_A11Y = { n1: ['tab1', 'Step 1, Component'], n2: ['tab2', 'Step 2, Nomenclature'],
+    n3: ['tab3', 'Step 3, Doc'], n4: ['tab4', 'Step 4, Data'] };
+  var STATE_WORDS = { done: 'done', warn: 'needs attention' };
+  function mark(id, state, label) {
+    var n = $(id);
+    n.classList.toggle('done', state === 'done');
+    n.classList.toggle('warnb', state === 'warn');
+    n.textContent = state === 'done' ? '✓' : state === 'warn' ? '!' : label;
+    var t = $(STEP_A11Y[id][0]);
+    t.setAttribute('aria-label', STEP_A11Y[id][1] + (state ? ' — ' + STATE_WORDS[state] : '') + (t.disabled ? ' — locked' : ''));
+  }
+  function updateStepper() {
+    var fresh = !!(fullJSON && fullJSON.meta && fullJSON.meta.name === selName);
+    $('tab2').disabled = !hasSel; $('tab3').disabled = !hasSel; $('tab4').disabled = !hasSel;
+    updateFooter();
+    renderCtx();
+    mark('n1', hasSel ? 'done' : null, '1');
+    // vérifié mais des constats restent (renommages non appliqués, description vide…) : ni « à faire », ni « fait »
+    mark('n2', fixState === null ? null : (fixState === 0 ? 'done' : 'warn'), '2');
+    // un doc attaché dont aucun titre ne matche ne remplit rien : le chip ne doit pas dire « fait »
+    mark('n3', !docData ? null : (docData.found.length ? 'done' : 'warn'), '3');
+    // résultats affichés mais plus alignés sur la sélection
+    mark('n4', fresh ? 'done' : (fullJSON ? 'warn' : null), '4');
+    $('tagline').hidden = hasSel; // la pédagogie ne sert qu'à l'état vide
+    $('docstat').innerHTML = docData
+      ? (docData.found.length
+          ? 'Doc attached: <b>' + esc(docData.name) + '</b> — fills ' + esc(docData.found.join(', ')) + '.'
+          : 'Doc attached: <b>' + esc(docData.name) + '</b> — <span style="color:var(--warn)">no recognized section</span>, nothing will be merged. <button class="lnk" id="todoc">Review step 3</button>')
+      : 'No doc attached — the “by hand” fields will stay unchecked. <button class="lnk" id="todoc">Attach one (step 3)</button>';
+    var td = $('todoc'); if (td) td.addEventListener('click', function () { showScreen('s3'); });
+  }
+
+  function generate() {
+    $('err').hidden = true; busy('go', 'gospin', true);
+    post({ type: 'extract', doc: docData });
+  }
+  $('go').addEventListener('click', generate);
+  function fail(m) {
+    $('err').textContent = m; $('err').hidden = false;
+    busy('go', 'gospin', false); scanBusy(false);
+    $('golabel').textContent = 'Generate JSON';
+  }
+
+  /* --- doc.md : parse déterministe (titres ## = champs de la convention, contenu verbatim) --- */
+  var DOC_MAP = { 'description': 'description', 'role': 'role', 'platforms': 'platforms', 'states': 'states',
+    'interaction': 'interaction', 'interaction.pattern': 'interaction', 'a11y': 'a11y', 'accessibility': 'a11y',
+    'behavior': 'behavior', 'behaviour': 'behavior', 'writing': 'writing', 'ux writing': 'writing', 'microcopy': 'writing',
+    'forbidden': 'forbidden', 'examples': 'examples' };
+  var DOC_ARR = { platforms: 1, states: 1, a11y: 1, behavior: 1, writing: 1, forbidden: 1, examples: 1 };
+  var DOC_DISPLAY = { description: 'Description', role: 'Role', platforms: 'Platforms', states: 'States',
+    interaction: 'Interaction', a11y: 'A11y', behavior: 'Behavior', writing: 'Writing', forbidden: 'Forbidden', examples: 'Examples' };
+  // strict sur le SENS, tolérant sur la FORME : gras, ponctuation de bord, \ d'export — retirés avant matching (déterministe)
+  function normKey(s) {
+    return String(s).toLowerCase()
+      .replace(/[*_`]/g, '')
+      .replace(/^[\s\d.)\-:]+/, '')
+      .replace(/[\s\\:.;,!]+$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  // quasi-match (préfixe dans un sens ou l'autre) : on SUGGÈRE le titre connu, on ne devine jamais à sa place
+  function suggestKey(k) {
+    if (!k || k.length < 3) return null;
+    var keys = Object.keys(DOC_MAP);
+    for (var i = 0; i < keys.length; i++) {
+      var c = keys[i];
+      if (c.indexOf(k) === 0 || k.indexOf(c) === 0) return DOC_DISPLAY[DOC_MAP[c]];
+    }
+    return null;
+  }
+  function parseDoc(name, text) {
+    var fields = {}, unknown = [], cur = null, buf = [];
+    function flush() {
+      if (!cur) { buf = []; return; }
+      var txt = buf.join('\n').trim(); buf = [];
+      if (!txt) { cur = null; return; }
+      if (DOC_ARR[cur]) {
+        var items = [];
+        txt.split('\n').forEach(function (l) {
+          var m = /^\s*[-*+]\s+(.*)$/.exec(l);
+          if (m) items.push(m[1].trim());
+          else if (items.length && l.trim()) items[items.length - 1] += ' ' + l.trim(); // continuation : rattachée à l'item précédent, rien n'est perdu
+        });
+        if (!items.length) items = txt.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+        if (cur === 'platforms' && items.length === 1 && items[0].indexOf(',') >= 0) items = items[0].split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+        fields[cur] = items;
+      } else if (cur === 'role') fields.role = txt.split('\n')[0].trim();
+      else fields[cur] = txt;
+      cur = null;
+    }
+    String(text).replace(/\r\n?/g, '\n').split('\n').forEach(function (line) {
+      var m = /^(#{1,6})\s+(.*)$/.exec(line);
+      if (m) {
+        flush();
+        if (m[1].length === 1) return; // titre du document, pas un champ
+        var key = normKey(m[2]);
+        if (DOC_MAP[key]) cur = DOC_MAP[key]; else unknown.push({ raw: m[2].trim(), sug: suggestKey(key) });
+        return;
+      }
+      buf.push(line);
+    });
+    flush();
+    return { name: name, fields: fields, found: Object.keys(fields), unknown: unknown };
+  }
+  function renderDoc() {
+    var el = $('docout');
+    if (!docData) { el.hidden = true; updateStepper(); return; }
+    el.hidden = false;
+    var html = docData.found.length
+      ? '<span class="okmsg">✓ ' + esc(docData.name) + '</span> <span class="hint">· fills: ' + docData.found.join(', ') + ' — merged at generation</span>'
+      : '<span style="color:var(--warn);font-weight:600">' + esc(docData.name) + ' · no recognized section</span> <span class="hint">· use ## Description, ## States, ## A11y, ## Examples…</span>';
+    // dire aussi ce que le doc NE couvre PAS : sinon on découvre les points manquants après génération
+    if (docData.found.length) {
+      var ALLF = ['description', 'role', 'platforms', 'states', 'interaction', 'a11y', 'behavior', 'writing', 'forbidden', 'examples'];
+      var missing = ALLF.filter(function (k) { return docData.found.indexOf(k) < 0; });
+      if (missing.length) html += '<div class="hint" style="margin-top:6px">Not covered: ' + missing.join(', ') + ' — these checklist points will stay unchecked (add the matching ## sections).</div>';
+    }
+    if (!docData.found.length) html += '<div class="hint" style="margin-top:6px">Nothing will be merged at generation — the file is kept attached but unused until its headings match the convention.</div>';
+    if (docData.unknown.length) html += '<div class="hint" style="margin-top:6px">Ignored heading(s): '
+      + docData.unknown.map(function (u) {
+          return esc(u.raw) + (u.sug ? ' <span style="color:var(--warn)">→ did you mean ## ' + esc(u.sug) + '?</span>' : '');
+        }).join(' · ')
+      + ' — not part of the convention.</div>';
+    html += '<button class="mini" id="docclear" style="margin-top:9px">Remove</button>';
+    el.innerHTML = html;
+    $('docclear').addEventListener('click', function () { docData = null; $('docfile').value = ''; renderDoc(); });
+    updateStepper();
+  }
+  function loadDocFile(f) {
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      var txt = String(r.result);
+      // TextEdit enregistre en RTF par défaut, même avec une extension .md : refuser clairement plutôt que fusionner du bruit
+      if (/^\s*\{\\rtf/.test(txt)) {
+        docData = null;
+        var el = $('docout'); el.hidden = false;
+        el.innerHTML = '<span style="color:var(--bad);font-weight:600">' + esc(f.name) + ' is an RTF file, not plain Markdown</span>'
+          + '<div class="hint" style="margin-top:6px">TextEdit saves RTF by default. Format → Make Plain Text (⇧⌘T), save, then re-attach — nothing was attached.</div>';
+        updateStepper();
+        return;
+      }
+      // double encodage UTF-8 (é → Ã©, « → Â«) : fichier réenregistré avec le mauvais encodage — refuser plutôt que fusionner de la prose polluée
+      if (/\u00C3[\u00A7-\u00BB]|\u00C2[\u00AB\u00BB]|\u00E2\u20AC/.test(txt)) {
+        docData = null;
+        var el2 = $('docout'); el2.hidden = false;
+        el2.innerHTML = '<span style="color:var(--bad);font-weight:600">' + esc(f.name) + ' looks mis-encoded (é appears as Ã©)</span>'
+          + '<div class="hint" style="margin-top:6px">The file was re-saved with the wrong encoding — usually by an editor set to Latin-1. Re-save it as UTF-8 (or attach the original without opening it), then re-attach. Nothing was attached.</div>';
+        updateStepper();
+        return;
+      }
+      docData = parseDoc(f.name, txt); renderDoc();
+    };
+    r.readAsText(f, 'utf-8');
+  }
+  $('docpick').addEventListener('click', function () { $('docfile').click(); });
+  $('docfile').addEventListener('change', function () { loadDocFile(this.files && this.files[0]); });
+  var s3 = $('s3');
+  s3.addEventListener('dragover', function (e) { e.preventDefault(); s3.classList.add('dropping'); });
+  s3.addEventListener('dragleave', function () { s3.classList.remove('dropping'); });
+  s3.addEventListener('drop', function (e) {
+    e.preventDefault(); s3.classList.remove('dropping');
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f && /\.(md|markdown|txt)$/i.test(f.name)) loadDocFile(f);
+  });
+
+  window.onmessage = function (ev) {
+    var msg = ev.data.pluginMessage; if (!msg) return;
+    if (msg.type === 'selection') {
+      hasSel = !!msg.name; $('seldot').className = 'dot' + (hasSel ? ' on' : '');
+      if (hasSel) {
+        var meta = [msg.kind === 'set' ? msg.variants + ' variant' + (msg.variants === 1 ? '' : 's') : 'single component'];
+        if (msg.props) meta.push(msg.props + ' prop' + (msg.props === 1 ? '' : 's'));
+        if (msg.viaInstance) meta.push('resolved from an instance');
+        selMeta = meta.join(' · '); // repris tel quel par le rappel de cible des écrans 2-4
+        $('selname').innerHTML = 'Selected: <b>' + esc(msg.name) + '</b> <span class="hint">· ' + esc(selMeta) + '</span>';
+      } else {
+        selMeta = '';
+        $('selname').innerHTML = 'Nothing selected · click a component (or a component set) on the canvas';
+      }
+      $('go').disabled = !hasSel;
+      // nouvelle cible : les propositions de renommage et le doc attaché ne la concernent plus
+      if (msg.name && selName && msg.name !== selName) {
+        // parcours en cours (scan, doc ou JSON généré) : on repart à l'étape 1 pour la
+        // nouvelle cible, plutôt que de laisser les étapes 2-4 afficher l'état périmé
+        if ((fullJSON || fixState !== null || docData) && curScreen !== 's1') showScreen('s1');
+        fixState = null; $('fixes').hidden = true; scanBusy(false);
+        docData = null; $('docfile').value = ''; renderDoc();
+      }
+      if (msg.name) selName = msg.name;
+      // résultat obsolète : le JSON affiché est celui d'un autre composant
+      if (fullJSON) {
+        var rn = (fullJSON.meta && fullJSON.meta.name) || '';
+        var stale = hasSel && msg.name !== rn;
+        $('out').classList.toggle('stale', stale);
+        $('stale').hidden = !stale;
+        if (stale) {
+          // la barre est sticky : le constat doit porter son remède, le bouton Generate est souvent hors champ
+          $('stale').innerHTML = 'results for <b>' + esc(rn) + '</b> · selection changed <button class="lnk" id="staleregen">Re-generate</button>';
+          $('staleregen').addEventListener('click', generate);
+          $('golabel').textContent = 'Generate JSON'; // nouvelle cible : ce sera sa première génération
+          $('genhint').hidden = false; // et son explication redevient utile
+        }
+      }
+      updateStepper();
+      maybeAutoScan(); // sélection changée alors qu'on est sur l'étape 2 : elle se relit pour la nouvelle cible
+    }
+    else if (msg.type === 'init') { $('ver').textContent = 'v' + String(msg.version).split(' ')[0]; }
+    else if (msg.type === 'error') { fail(msg.message); }
+    else if (msg.type === 'extract-progress') { $('golabel').textContent = 'Generating… ' + msg.done + '/' + msg.total; }
+    else if (msg.type === 'extracted') { busy('go', 'gospin', false); render(msg.data); }
+    else if (msg.type === 'autofix-proposals') { if (msg.token !== scanPending) return; scanBusy(false); renderFixes(msg.proposals, msg.findings); }
+    else if (msg.type === 'autofix-done') { scanBusy(false); fixDone(msg.result); }
+    else if (msg.type === 'tokens') { tokensDone(msg.data); }
+  };
+
+  /* --- tokens + report --- */
+  $('tokens').addEventListener('click', function () { post({ type: 'tokens' }); });
+  $('tokens1').addEventListener('click', function () { post({ type: 'tokens' }); });
+  function tokensDone(data) {
+    download('tokens.json', JSON.stringify(data, null, 2));
+    ['tokens', 'tokens1'].forEach(function (id) {
+      var b = $(id); if (!b) return;
+      b.textContent = '✓'; setTimeout(function () { b.textContent = 'Tokens .json'; }, 1300);
+    });
+  }
+  $('report').addEventListener('click', function () {
+    if (!fullJSON) return;
+    var a = audit(fullJSON), lint = fullJSON._lint || [];
+    var md = '# ' + ((fullJSON.meta && fullJSON.meta.name) || 'Component') + ' · component-as-data report\n\n'
+      + '## Completeness (' + a.cov + '/' + a.tot + ')\n'
+      + a.checks.map(function (c) {
+          return '- [' + (c.ok ? 'x' : ' ') + '] ' + c.t + ' (' + c.p + ')'
+            + (!c.ok && c.how ? ' — ' + (c.how === 'hand' ? 'write in the doc.md' : 'fix in Figma, re-generate') : '');
+        }).join('\n')
+      + '\n\n## Nomenclature (' + lint.length + ')\n'
+      + (lint.length ? lint.map(function (l) { return '- [' + l.level + '] ' + l.rule + ': ' + l.msg; }).join('\n') : '- clean');
+    clip(md, this);
+  });
+  function download(name, text) {
+    // un nom de composant peut contenir des / (ex. ui/button) : illégal dans un nom de fichier
+    var safe = String(name).replace(/[\/\\:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim() || 'component.json';
+    var blob = new Blob([text], { type: 'application/json' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = safe; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+  // le libellé d'origine est mémorisé sur le bouton : deux clics rapprochés ne le figent pas sur « ✓ »
+  function flash(btn, ok, okLabel) {
+    var o = btn.getAttribute('data-label') || btn.textContent;
+    btn.setAttribute('data-label', o);
+    btn.textContent = ok ? (okLabel || '✓') : '✗ copy failed';
+    setTimeout(function () { btn.textContent = o; }, ok ? 1300 : 2400);
+  }
+  // execCommand ne jette pas toujours : il REND false. Sans contrôle du retour, un échec de copie
+  // affichait « ✓ » et l'utilisateur collait du vide sans comprendre.
+  function clip(text, btn, okLabel) {
+    var ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    flash(btn, ok, okLabel);
+  }
+
+  /* --- naming check --- */
+  function renderFixes(list, finds) {
+    fixProps = list || [];
+    fixFinds = finds || [];
+    fixState = fixProps.length + fixFinds.length; // l'étape n'est « clean » que sans renommage NI constat manuel
+    updateStepper();
+    var el = $('fixes'); el.hidden = false;
+    var pre = '';
+    if (appliedNote) {
+      pre = '<span class="okmsg">' + appliedNote + '</span>';
+      if (appliedFails.length) pre += '<div class="hint" style="margin-top:6px">Failed: ' + appliedFails.map(esc).join(' · ') + '</div>';
+      if (fullJSON) pre += '<div class="hint" style="margin-top:6px">Re-generate the JSON (step 4) to see the result.</div>';
+      pre += '<div style="height:10px"></div>';
+      appliedNote = ''; appliedFails = [];
+    }
+    var findsHtml = fixFinds.length
+      ? '<div style="margin-top:12px"><b>To fix by hand in Figma · ' + fixFinds.length + '</b><ul>'
+        + fixFinds.map(function (l) {
+            return '<li><span class="' + (l.level === 'warn' ? 'w' : 'h') + '">' + (l.level === 'warn' ? '!' : '·') + '</span> ' + esc(l.msg) + '</li>';
+          }).join('') + '</ul></div>'
+      : '';
+    // le scan part tout seul à l'arrivée sur l'étape ; ce lien couvre le cas où la source Figma
+    // a changé (correction faite à la main) sans qu'on ait quitté l'écran
+    var again = ' · <button class="lnk" id="fixagain">check again</button>';
+    var body;
+    if (!fixProps.length && !fixFinds.length) {
+      body = '<span class="okmsg">✓ Nomenclature looks good</span><span class="hint"> · nothing to fix</span>' + again;
+    } else if (!fixProps.length) {
+      body = '<span class="okmsg">✓ Nothing to rename automatically</span>' + again + findsHtml;
+    } else {
+      var rows = fixProps.map(function (f, i) {
+        return '<label class="fxrow"><input type="checkbox" data-i="' + i + '"' + (f.checked ? ' checked' : '') + '> '
+          + '<span class="mono">' + esc(f.from) + '</span> → <span class="mono" style="color:var(--accent)">' + esc(f.to) + '</span>'
+          + (f.note ? ' <span class="hint">' + esc(f.note) + '</span>' : '') + '</label>';
+      }).join('');
+      body = '<b>Proposed renames · ' + fixProps.length + '</b>'
+        + (fixProps.length > 1 ? ' <button class="lnk" id="fixall">all</button> · <button class="lnk" id="fixnone">none</button>' : '')
+        + again
+        + '<div style="margin-top:8px">' + rows + '</div>'
+        + '<button class="mini" id="fixapply" style="margin-top:12px">Apply selected</button>'
+        + '<span class="hint" style="margin-left:8px">Undoable (Cmd/Ctrl+Z)</span>'
+        + findsHtml;
+    }
+    el.innerHTML = pre + body;
+    $('fixagain').addEventListener('click', function () { fixState = null; updateStepper(); startScan(); });
+    if (!fixProps.length) return;
+    function setAll(on) {
+      el.querySelectorAll('input[type=checkbox]').forEach(function (b) { b.checked = on; });
+    }
+    if (fixProps.length > 1) {
+      $('fixall').addEventListener('click', function () { setAll(true); });
+      $('fixnone').addEventListener('click', function () { setAll(false); });
+    }
+    $('fixapply').addEventListener('click', function () {
+      var boxes = el.querySelectorAll('input[type=checkbox]'), sel = [];
+      for (var i = 0; i < boxes.length; i++) if (boxes[i].checked) sel.push(fixProps[+boxes[i].getAttribute('data-i')]);
+      if (sel.length) { scanBusy(true, 'Applying the renames…'); post({ type: 'autofix-apply', fixes: sel }); }
+    });
+  }
+  function fixDone(r) {
+    // le re-check est automatique : l'utilisateur veut toujours voir ce qui reste après application
+    appliedNote = '✓ ' + r.applied + ' rename(s) applied';
+    appliedFails = (r.failed || []).slice();
+    startScan();
+  }
+
+  /* --- results --- */
+  // audit en checklist UNIQUE : t = libellé humain, p = champ JSON, how = où agir quand ça manque
+  // ('figma' = corriger la source puis re-générer ; 'hand' = écrire dans le doc.md ; null = automatique)
+  function audit(f) {
+    var checks = [], chk = function (path, label, how, cond) { checks.push({ p: path, t: label, how: how, ok: !!cond }); };
+    chk('styles', 'Colors bound to variables (no hardcoded HEX)', 'figma', !/#[0-9A-Fa-f]{6}/.test(JSON.stringify(f.styles || {})));
+    chk('styles.precedence', 'Override order declared', null, f.styles && f.styles.precedence);
+    chk('meta.description', 'Description — what it is, when to pick it over a neighbor', 'hand', f.meta && f.meta.description);
+    chk('meta.role', 'Role confirmed (button, dialog, tag…)', 'hand', f.meta && f.meta.role && !/\?/.test(f.meta.role));
+    var runtime = f.api && f.api.props && Object.keys(f.api.props).some(function (k) { return f.api.props[k].runtime; });
+    chk('api.props.state', 'State values mapped to CSS / attributes', 'figma', runtime || !(f.api && f.api.props && f.api.props.state));
+    chk('states', 'Runtime states listed (loading, error, empty…)', 'hand', f.states && f.states.list && f.states.list.length);
+    chk('interaction.pattern', 'Reference interaction pattern (ARIA APG, HIG, Material)', 'hand', f.interaction && f.interaction.pattern);
+    chk('rules.a11y', 'Accessibility rules (focus, labels, keyboard)', 'hand', f.rules && f.rules.a11y && f.rules.a11y.length);
+    chk('rules.behavior', 'Behavior rules (click, keyboard, dismiss…)', 'hand', f.rules && f.rules.behavior && f.rules.behavior.length);
+    chk('rules.writing', 'UX writing rules (labels, errors, empty states)', 'hand', f.rules && f.rules.writing && f.rules.writing.length);
+    chk('rules.forbidden', 'Forbidden usages declared', 'hand', f.rules && Array.isArray(f.rules.forbidden));
+    chk('platforms', 'Platforms — where it ships (web, iOS, Android…)', 'hand', f.platforms && f.platforms.length);
+    chk('examples', 'At least 2 usage examples', 'hand', f.examples && f.examples.length >= 2);
+    var gaps = checks.filter(function (c) { return !c.ok; });
+    return { cov: checks.length - gaps.length, tot: checks.length, checks: checks, gaps: gaps };
+  }
+
+  function stripProv(k, v) { return (k === '_provenance' || k === '_lint') ? undefined : v; }
+  function hlv(v) {
+    return esc(JSON.stringify(v, stripProv, 2))
+      .replace(/"([^"]+)":/g, '<span class="jk">"$1"</span>:')
+      .replace(/: "([^"]*)"/g, ': <span class="jv">"$1"</span>');
+  }
+  function sizeHint(v) {
+    if (v && typeof v === 'object') {
+      var n = Array.isArray(v) ? v.length : Object.keys(v).length;
+      return ' <span class="hint">· ' + n + (Array.isArray(v) ? ' item(s)' : ' key(s)') + '</span>';
+    }
+    return '';
+  }
+  function sectionHTML(key, v) {
+    if (key === 'styles' && v && v.overrides) {
+      var head = {}; for (var k in v) if (k !== 'overrides') head[k] = v[k];
+      return '<details class="sec" open><summary><span class="jk">"styles"</span>' + sizeHint(v) + '</summary><pre>' + hlv(head) + '</pre>'
+        + '<details class="sec sub"><summary><span class="jk">"overrides"</span> <span class="hint">· ' + v.overrides.length + ' variant(s) differ from the default</span></summary><pre>' + hlv(v.overrides) + '</pre></details>'
+        + '</details>';
+    }
+    return '<details class="sec"' + (key === '_todo_ai' ? '' : ' open') + '><summary><span class="jk">"' + esc(key) + '"</span>' + sizeHint(v) + '</summary><pre>' + hlv(v) + '</pre></details>';
+  }
+
+  function render(f) {
+    fullJSON = f;
+    var a = audit(f);
+    var lint = (f._lint || []).slice().sort(function (x, y) { return (x.level === 'warn' ? 0 : 1) - (y.level === 'warn' ? 0 : 1); });
+    // chaque bloc est un accordéon qui porte son indicateur dans son titre
+    $('lint').hidden = false;
+    $('lint').innerHTML = '<summary><b>Nomenclature · ' + (lint.length ? lint.length : '✓ clean') + '</b></summary>'
+      + '<span class="psub">Naming drift in the Figma source (rules from nomenclature-composants.md). Fix it in Figma — step 2 automates the renames — then re-generate.</span>'
+      + (lint.length ? '<ul>' + lint.map(function (l) {
+          return '<li><span class="' + (l.level === 'warn' ? 'w' : 'h') + '">' + (l.level === 'warn' ? '!' : '·') + '</span> <span class="r">' + esc(l.rule) + '</span> ' + esc(l.msg) + '</li>';
+        }).join('') + '</ul>'
+        : '<p class="hint" style="margin:7px 0 0">No naming drift found.</p>');
+    var cks = a.checks.slice().sort(function (x, y) { return (x.ok ? 1 : 0) - (y.ok ? 1 : 0); }); // le non-coché d'abord : c'est l'actionnable
+    $('gaps').hidden = false;
+    $('gaps').innerHTML = '<summary><b>Completeness · ' + a.cov + '/' + a.tot + '</b></summary>'
+      + '<span class="psub">The ' + a.tot + ' points of a complete component sheet. ✗ = to do — “in Figma” means fix the source then re-generate; “by hand” means write it in the doc.md (step 3).</span>'
+      + '<ul class="ck">' + cks.map(function (c) {
+          // « by hand » MÈNE à l'étape 3 : le point manquant porte son chemin, au lieu de nommer une étape hors champ
+          var tag = !c.ok && c.how
+            ? (c.how === 'hand'
+                ? ' <button class="badge w todoc" title="Go to step 3 — this point is filled by the doc.md">by hand</button>'
+                : ' <span class="badge h">in Figma</span>')
+            : '';
+          return '<li' + (c.ok ? ' class="done"' : '') + '><span class="' + (c.ok ? 'ok3' : 'no3') + '" aria-hidden="true">' + (c.ok ? '✓' : '✗') + '</span>'
+            + '<span><span class="vh">' + (c.ok ? 'Done: ' : 'To do: ') + '</span>' + esc(c.t) + ' <span class="r2">' + esc(c.p) + '</span>'
+            + tag + '</span></li>';
+        }).join('') + '</ul>';
+    $('gaps').querySelectorAll('.todoc').forEach(function (b) { b.addEventListener('click', function () { showScreen('s3'); }); });
+    $('dataname').textContent = String((f.meta && f.meta.name) || 'component').replace(/[\/\\]+/g, '-') + '.json';
+    var keys = Object.keys(f).filter(function (k) { return k !== '_provenance' && k !== '_lint'; });
+    $('json').innerHTML = keys.map(function (k) { return sectionHTML(k, f[k]); }).join('');
+    $('out').classList.remove('stale'); $('stale').hidden = true;
+    $('out').hidden = false;
+    $('golabel').textContent = 'Re-generate JSON';
+    $('genhint').hidden = true; // l'explication n'est utile qu'avant la première génération
+    updateStepper();
+    showScreen('s4');
+  }
+
+  $('copy').addEventListener('click', function () {
+    clip(JSON.stringify(fullJSON, stripProv, 2), this, '✓ Copied');
+  });
+  $('export').addEventListener('click', function () {
+    download(((fullJSON.meta && fullJSON.meta.name) || 'component') + '.json', JSON.stringify(fullJSON, stripProv, 2));
+  });
+
+  /* --- poignée de redimensionnement : l'UI demande, code.js applique figma.ui.resize --- */
+  (function () {
+    var h = $('rsz'), raf = null, pend = null;
+    h.addEventListener('pointerdown', function (e) {
+      e.preventDefault(); h.setPointerCapture(e.pointerId);
+      var move = function (ev) {
+        pend = { w: ev.clientX + 8, h: ev.clientY + 8 };
+        if (!raf) raf = requestAnimationFrame(function () { raf = null; if (pend) post({ type: 'resize', w: pend.w, h: pend.h }); });
+      };
+      var up = function () { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); };
+      h.addEventListener('pointermove', move);
+      h.addEventListener('pointerup', up);
+    });
+  })();
+
+  updateStepper();
+  post({ type: 'ui-ready' }); // code.js répond : version (en-tête) + état de sélection
+</script>
